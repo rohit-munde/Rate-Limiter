@@ -6,14 +6,14 @@ package com.example.backend.dto;
 public record RateLimitResult(
         boolean allowed,
         int capacity,
-        int remainingTokens,
+        int remainingRequests,
         long retryAfterSeconds
 ) {
-    public static RateLimitResult allowed(int capacity, int remainingTokens) {
-        return new RateLimitResult(true, capacity, remainingTokens, 0);
+    public static RateLimitResult allowed(int capacity, int remainingRequests) {
+        return new RateLimitResult(true, capacity, remainingRequests, 0);
     }
 
-    public static RateLimitResult blocked(int capacity, int remainingTokens, long retryAfterSeconds) {
-        return new RateLimitResult(false, capacity, remainingTokens, retryAfterSeconds);
+    public static RateLimitResult blocked(int capacity, int remainingRequests, long retryAfterSeconds) {
+        return new RateLimitResult(false, capacity, remainingRequests, retryAfterSeconds);
     }
 }

@@ -10,11 +10,11 @@ import java.util.Map;
  * Simple test endpoint to verify the rate limiting functionality.
  */
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/gateway")
 public class TestController {
 
-    @GetMapping("/hello")
+    @GetMapping("/health")
     public Map<String, String> hello() {
-        return Map.of("message", "Hello from IndieDev API Gateway!");
+        return Map.of("status", "UP", "service", "rate-limiter-gateway");
     }
 }

@@ -26,6 +26,11 @@ public class RateLimiterFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return "/gateway/health".equals(request.getRequestURI());
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
@@ -38,10 +43,13 @@ public class RateLimiterFilter extends OncePerRequestFilter {
 
         if (result.allowed()) {
             response.setHeader("X-RateLimit-Limit", String.valueOf(result.capacity()));
-            response.setHeader("X-RateLimit-Remaining", String.valueOf(result.remainingTokens()));
+            response.setHeader("X-RateLimit-Remaining", String.valueOf(result.remainingRequests()));
             filterChain.doFilter(request, response);
         } else {
             response.setStatus(429);
+            response.setHeader("X-RateLimit-Limit", String.valueOf(result.capacity()));
+            response.setHeader("X-RateLimit-Remaining", String.valueOf(result.remainingRequests()));
+            response.setHeader("Retry-After", String.valueOf(result.retryAfterSeconds()));
             response.setContentType("application/json");
             String jsonResponse = String.format("{\"message\": \"Rate limit exceeded. Try again in %d seconds.\"}", result.retryAfterSeconds());
             response.getWriter().write(jsonResponse);

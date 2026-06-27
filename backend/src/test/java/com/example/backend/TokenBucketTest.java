@@ -1,6 +1,6 @@
 package com.example.backend;
 
-import com.example.backend.service.TokenBucket;
+import com.example.backend.service.algorithm.tokenbucket.TokenBucket;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
