@@ -29,7 +29,12 @@ public class LeakingBucketRateLimiterService implements RateLimiterService {
     @Override
     public RateLimitResult check(RateLimitRequest request) {
         String key = "rate_limit:leaking_bucket:" + request.clientId() + ":" + request.path() + ":" + request.method();
-        LeakingBucket bucket = buckets.computeIfAbsent(key, ignored -> new LeakingBucket(defaultCapacity, leakRate));
+        LeakingBucket bucket = buckets.get(key);
+        if (bucket == null) {
+            LeakingBucket newBucket = new LeakingBucket(defaultCapacity, leakRate);
+            LeakingBucket existingBucket = buckets.putIfAbsent(key, newBucket);
+            bucket = existingBucket == null ? newBucket : existingBucket;
+        }
 
         boolean allowed = bucket.tryConsume();
         if (allowed) {

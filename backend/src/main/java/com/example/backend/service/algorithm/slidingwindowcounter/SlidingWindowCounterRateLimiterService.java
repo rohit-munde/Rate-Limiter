@@ -5,10 +5,13 @@ import com.example.backend.dto.RateLimitResult;
 import com.example.backend.service.RateLimiterService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Service
 @ConditionalOnProperty(
@@ -16,61 +19,57 @@ import java.time.Duration;
         havingValue = "sliding-window-counter"
 )
 public class SlidingWindowCounterRateLimiterService implements RateLimiterService {
-    private final StringRedisTemplate redisTemplate;
     private final int defaultCapacity;
     private final long windowSeconds;
+    private final ConcurrentMap<String, WindowCounter> counters = new ConcurrentHashMap<>();
 
-    public SlidingWindowCounterRateLimiterService(StringRedisTemplate redisTemplate,
-                                                  @Value("${rate-limiter.fixed-window.limit:10}") int defaultCapacity,
-                                                  @Value("${rate-limiter.fixed-window.window-seconds:60}") long windowSeconds) {
-        this.redisTemplate = redisTemplate;
+    public SlidingWindowCounterRateLimiterService(
+            @Value("${rate-limiter.sliding-window-counter.limit:10}") int defaultCapacity,
+            @Value("${rate-limiter.sliding-window-counter.window-seconds:60}") long windowSeconds
+    ) {
         this.defaultCapacity = defaultCapacity;
         this.windowSeconds = windowSeconds;
     }
 
-
     @Override
     public RateLimitResult check(RateLimitRequest request) {
         String key = "rate_limit:sliding_window_counter:" + request.clientId() + ":" + request.path() + ":" + request.method();
+        long currentWindow = currentWindow();
+        long previousWindow = currentWindow - 1;
 
-        return checkWithRedis(key);
-    }
+        WindowCounter counter = counters.get(key);
+        if (counter == null) {
+            WindowCounter newCounter = new WindowCounter();
+            WindowCounter existingCounter = counters.putIfAbsent(key, newCounter);
+            counter = existingCounter == null ? newCounter : existingCounter;
+        }
 
-    private RateLimitResult checkWithRedis(String key) {
-        long currentTimeMillis = System.currentTimeMillis();
-        long windowInMillis = windowSeconds * 1000;
-        long currWindow = currentTimeMillis/windowInMillis;
-        long prevWindow = currWindow - 1;
-        //1,2,3,4,5
-        // 60, 120, 180..
+        counter.removeOldWindows(previousWindow);
 
-        String currKey = key + ":" + currWindow;
-        String prevKey = key + ":" + prevWindow;
+        int currentCount = counter.getCount(currentWindow);
+        int previousCount = counter.getCount(previousWindow);
+        double previousWindowWeight = getPreviousWindowWeight();
+        double estimatedCount = currentCount + previousCount * previousWindowWeight;
 
-        int currCount = getCount(currKey);
-        int prevCount = getCount(prevKey);
-
-        double prevWindowWeight = getPrevWindowWeight();
-
-        double estimatedCount = currCount + prevCount * prevWindowWeight; // <- Core logic for the sliding Window Counter Algorithm
-
-        if(estimatedCount >= defaultCapacity) {
+        if (estimatedCount >= defaultCapacity) {
             return RateLimitResult.blocked(defaultCapacity, 0, retryAfterSeconds(estimatedCount));
         }
 
-        Long updatedCount = redisTemplate.opsForValue().increment(currKey, 1);
-
-        if(updatedCount == 1) {
-            redisTemplate.expire(currKey, Duration.ofSeconds(windowSeconds * 2));
-        }
+        counter.increment(currentWindow);
 
         double updatedEstimatedCount = estimatedCount + 1;
-        int remainingRequests = Math.max(defaultCapacity - (int) Math.ceil(updatedEstimatedCount),0);
+        int remainingRequests = Math.max(defaultCapacity - (int) Math.ceil(updatedEstimatedCount), 0);
 
         return RateLimitResult.allowed(defaultCapacity, remainingRequests);
     }
 
-    private double getPrevWindowWeight() {
+    private long currentWindow() {
+        long currentTimeMillis = System.currentTimeMillis();
+        long windowInMillis = windowSeconds * 1000;
+        return currentTimeMillis / windowInMillis;
+    }
+
+    private double getPreviousWindowWeight() {
         long currentTimeMillis = System.currentTimeMillis();
         long windowInMillis = windowSeconds * 1000;
         long elapsedTimeInCurrentWindow = currentTimeMillis % windowInMillis;
@@ -79,20 +78,37 @@ public class SlidingWindowCounterRateLimiterService implements RateLimiterServic
     }
 
     private long retryAfterSeconds(double estimatedCount) {
-        if(estimatedCount < defaultCapacity) {
+        if (estimatedCount < defaultCapacity) {
             return 0;
         }
         long currentTimeMillis = System.currentTimeMillis();
         long windowInMillis = windowSeconds * 1000;
         long elapsedTimeInCurrentWindow = currentTimeMillis % windowInMillis;
-
         long retryAfterMillis = windowInMillis - elapsedTimeInCurrentWindow;
 
         return Math.max(1, (long) Math.ceil(retryAfterMillis / 1000.0));
     }
 
-    private int getCount(String key) {
-        String count  = redisTemplate.opsForValue().get(key);
-        return count == null ? 0 : Integer.parseInt(count);
+    private static class WindowCounter {
+        private final Map<Long, Integer> counts = new HashMap<>();
+
+        private synchronized int getCount(long window) {
+            return counts.getOrDefault(window, 0);
+        }
+
+        private synchronized void increment(long window) {
+            int currentCount = getCount(window);
+            counts.put(window, currentCount + 1);
+        }
+
+        private synchronized void removeOldWindows(long oldestWindowToKeep) {
+            Iterator<Long> iterator = counts.keySet().iterator();
+            while (iterator.hasNext()) {
+                long window = iterator.next();
+                if (window < oldestWindowToKeep) {
+                    iterator.remove();
+                }
+            }
+        }
     }
 }
