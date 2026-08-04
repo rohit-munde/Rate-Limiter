@@ -38,6 +38,7 @@ public class TokenBucketRateLimiterService implements RateLimiterService {
         String key = "rate_limit:token_bucket:" + request.clientId() + ":" + request.path() + ":" + request.method();
 
         TokenBucket bucket = buckets.get(key);
+
         if (bucket == null) {
             TokenBucket newBucket = new TokenBucket(defaultCapacity, defaultRefillRatePerSecond);
             TokenBucket existingBucket = buckets.putIfAbsent(key, newBucket);

@@ -47,7 +47,7 @@ public class SlidingWindowRateLimiterService implements RateLimiterService {
 
         return RateLimitResult.blocked(
                 window.getCapacity(),
-                window.getRemainingRequests(),
+               0,
                 window.getRetryAfterSeconds()
         );
     }
