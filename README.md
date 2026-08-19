@@ -4,6 +4,10 @@ This project is a high-performance **API Gateway (Reverse Proxy)** featuring a p
 
 This repository is optimized for learning and experimentation, allowing developers to switch, configure, and compare different rate-limiting strategies in real-time.
 
+
+## How to answer during interview
+<img width="1768" height="1728" alt="image" src="https://github.com/user-attachments/assets/c53aa83a-a8db-4341-a183-34cf33885c1b" />
+
 ---
 
 ## 📖 Table of Contents
