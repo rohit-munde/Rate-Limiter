@@ -60,7 +60,7 @@ The project acts as an intermediate **API Gateway** positioned between clients a
 #### How It Works
 A bucket is initialized with a maximum capacity of tokens. Tokens are added to the bucket at a constant refill rate (e.g., $r$ tokens/sec). Each request consumes exactly 1 token. If the bucket has no tokens left, requests are blocked.
 
-![Token Bucket Diagram](docs/images/token-bucket.png)
+<img width="1288" height="920" alt="image" src="https://github.com/user-attachments/assets/cf1a3c13-6c93-43a0-a6bc-482462b12573" />
 
 #### Java Implementation
 - **Algorithm Class**: [`TokenBucket.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/tokenbucket/TokenBucket.java)
