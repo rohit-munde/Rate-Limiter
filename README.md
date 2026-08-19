@@ -62,6 +62,9 @@ A bucket is initialized with a maximum capacity of tokens. Tokens are added to t
 
 <img width="1554" height="1100" alt="image" src="https://github.com/user-attachments/assets/439e633a-9053-483c-8f7a-c466fe74f4c8" />
 
+<img width="1554" height="1300" alt="image" src="https://github.com/user-attachments/assets/d099f943-7ee1-4e9f-8f08-6b60b92850eb" />
+
+
 
 #### Java Implementation
 - **Algorithm Class**: [`TokenBucket.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/tokenbucket/TokenBucket.java)
