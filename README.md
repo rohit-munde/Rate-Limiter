@@ -141,10 +141,11 @@ To solve the boundary issue of the Fixed Window, the Sliding Window Log records 
 #### How It Works
 A hybrid approach combining Fixed Window Counter efficiency with Sliding Window precision. It calculates the request rate as a weighted average between the current window's request count and the previous window's request count.
 
+<img width="1618" height="1482" alt="image" src="https://github.com/user-attachments/assets/1f8e26d3-b4bf-4228-bb75-5a612cabbbde" />
+
 Mathematical formulation:
 $$\text{Estimated Count} = \text{Current Window Count} + \text{Previous Window Count} \times \frac{\text{Remaining Time in Current Window}}{\text{Window Size}}$$
 
-![Sliding Window Counter Diagram](docs/images/sliding-window-counter.png)
 
 #### Java Implementation
 - **Algorithm Class**: [`SlidingWindowCounter.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindowcounter/SlidingWindowCounter.java)
