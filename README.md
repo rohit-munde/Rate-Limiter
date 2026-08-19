@@ -58,20 +58,29 @@ The project acts as an intermediate **API Gateway** positioned between clients a
 ### 1. Token Bucket
 
 #### How It Works
-A bucket is initialized with a maximum capacity of tokens. Tokens are added to the bucket at a constant refill rate (e.g., $r$ tokens/sec). Each request consumes exactly 1 token. If the bucket has no tokens left, requests are blocked.
+- A bucket is initialized with a maximum capacity of tokens.
+- Tokens are added to the bucket at a constant refill rate (e.g., $r$ tokens/sec).
+- Each request consumes exactly $1$ token. If the bucket has no tokens left, the request is blocked.
 
 <img width="1554" height="1100" alt="image" src="https://github.com/user-attachments/assets/439e633a-9053-483c-8f7a-c466fe74f4c8" />
 
 <img width="1554" height="1300" alt="image" src="https://github.com/user-attachments/assets/d099f943-7ee1-4e9f-8f08-6b60b92850eb" />
 
-
-
-#### Java Implementation
-- **Algorithm Class**: [`TokenBucket.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/tokenbucket/TokenBucket.java)
-- **Service Handler**: [`TokenBucketRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/tokenbucket/TokenBucketRateLimiterService.java)
-- **Thread Safety**: Synchronized block on `refill()` and `tryConsume()`. Refill uses elapsed time calculation since `lastRefillTimestamp` rather than a background background timer thread, which is highly efficient.
+#### Core Java Implementation
+- **Files**: [`TokenBucket.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/tokenbucket/TokenBucket.java) | [`TokenBucketRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/tokenbucket/TokenBucketRateLimiterService.java)
+- **Thread Safety**: Synchronized block on `refill()` and `tryConsume()`. Refill uses elapsed time calculation since `lastRefillTimestamp` rather than a background timer thread, which is highly efficient.
 
 ```java
+// Core refill & consumption logic
+public synchronized void refill() {
+    long now = System.currentTimeMillis();
+    double elapsedTime = (now - lastRefillTimestamp) / 1000.0;
+    if (elapsedTime > 0) {
+        tokens = Math.min(capacity, tokens + (elapsedTime * refillRatePerSecond));
+        lastRefillTimestamp = now;
+    }
+}
+
 public synchronized boolean tryConsume() {
     refill();
     if (tokens >= 1) {
@@ -87,70 +96,150 @@ public synchronized boolean tryConsume() {
 ### 2. Leaking Bucket
 
 #### How It Works
-Requests enter a FIFO queue (the bucket) of a fixed capacity. If the queue is full, incoming requests are dropped. Requests leak out of the bucket at a constant, stable rate. It acts as a traffic shaper, turning bursty traffic into a smooth, steady stream.
+- Requests enter a queue (the bucket) of a fixed capacity.
+- If the queue is full, incoming requests are dropped (overflow).
+- Requests leak out of the bucket at a constant, stable rate. It acts as a traffic shaper to ensure a steady rate of output traffic.
 
 <img width="1618" height="918" alt="image" src="https://github.com/user-attachments/assets/a5d6d08a-8478-45a0-8e01-70e5b3cebf7f" />
 
+#### Core Java Implementation
+- **Files**: [`LeakingBucket.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/leakingbucket/LeakingBucket.java) | [`LeakingBucketRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/leakingbucket/LeakingBucketRateLimiterService.java)
+- **Mechanics**: Instead of an actual thread-backed queue, it is modeled mathematically using `waterLevel`. When a request arrives, the algorithm calculates how much "water" has leaked since the last request based on `leakRatePerSecond`, adjusts the `waterLevel`, and adds $1$ to `waterLevel` if it does not exceed `capacity`.
 
-#### Java Implementation
-- **Algorithm Class**: [`LeakingBucket.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/leakingbucket/LeakingBucket.java)
-- **Service Handler**: [`LeakingBucketRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/leakingbucket/LeakingBucketRateLimiterService.java)
-- **Mechanics**: Instead of an actual thread-backed queue, it is modeled mathematically using `waterLevel`. When a request arrives, the algorithm calculates how much "water" has leaked out since the last request based on `leakRatePerSecond`, adjusts the `waterLevel`, and adds $1$ to `waterLevel` if it does not exceed `capacity`.
+```java
+// Core leak & consumption logic
+public synchronized void leak() {
+    long now = System.currentTimeMillis();
+    double elapsedTime = (now - lastTimeStamp) / 1000.0;
+    if (elapsedTime > 0) {
+        waterLevel = Math.max(0, waterLevel - (elapsedTime * leakRatePerSecond));
+        lastTimeStamp = now;
+    }
+}
+
+public synchronized boolean tryConsume() {
+    leak();
+    if (waterLevel + 1 <= capacity) {
+        waterLevel++;
+        return true;
+    }
+    return false;
+}
+```
 
 ---
 
 ### 3. Fixed Window Counter
 
 #### How It Works
-The timeline is divided into fixed-size windows (e.g., 1 minute). Each window maintains an independent counter. When a request arrives, the current window is determined, and its counter is incremented. If the counter exceeds the window capacity, the request is rejected.
+- Timeline is divided into fixed-size windows (e.g., 1 minute).
+- Each window maintains its own independent counter.
+- When a request arrives, the current window's counter is incremented. If it exceeds capacity, the request is rejected.
 
 <img width="1618" height="402" alt="image" src="https://github.com/user-attachments/assets/4685918d-7859-46ed-b88d-3836c39074ad" />
 
 <img width="1618" height="994" alt="image" src="https://github.com/user-attachments/assets/93bc50f9-5ae8-4a97-9f42-1822eb3bf233" />
 
-### Problem with Fixed Window Counter
+#### The Boundary Problem
+- Vulnerable to a burst of double the maximum capacity at the edges of window resets. For example, if the limit is 5 per minute, a client can send 5 requests at `0:59` and another 5 at `1:01`, successfully passing 10 requests within a 2-second period.
 
 <img width="1618" height="1170" alt="image" src="https://github.com/user-attachments/assets/be61f8aa-5326-4bcb-b6f6-ba0d6098c89e" />
 
+#### Core Java Implementation
+- **Files**: [`FixedWindow.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/fixedwindow/FixedWindow.java) | [`FixedWindowRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/fixedwindow/FixedWindowRateLimiterService.java)
 
-#### Java Implementation
-- **Algorithm Class**: [`FixedWindow.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/fixedwindow/FixedWindow.java)
-- **Service Handler**: [`FixedWindowRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/fixedwindow/FixedWindowRateLimiterService.java)
-- **The Boundary Problem**: Simple to implement but vulnerable to a burst of double the maximum capacity at the edges of window resets. For example, if the limit is 5 per minute, a client can send 5 requests at 0:59 and another 5 at 1:01, successfully passing 10 requests within a 2-second period.
+```java
+// Core reset & consumption logic
+public synchronized void resetWindowIfNeeded() {
+    long now = System.currentTimeMillis();
+    double elapsedTime = (now - windowStartTimeStamp) / 1000.0;
+    if (elapsedTime >= secondsInFixedWindow) {
+        requestCount = 0;
+        windowStartTimeStamp = now;
+    }
+}
+
+public synchronized boolean tryConsume() {
+    resetWindowIfNeeded();
+    if (requestCount < capacity) {
+        requestCount++;
+        return true;
+    }
+    return false;
+}
+```
 
 ---
 
 ### 4. Sliding Window Log
 
 #### How It Works
-To solve the boundary issue of the Fixed Window, the Sliding Window Log records the exact timestamp of every request. When a request arrives, it removes all timestamps older than the sliding window threshold (e.g., current time minus 1 minute). The remaining timestamps represent the current request count. If this count is within capacity, the new timestamp is logged and the request is allowed.
+- Solves the boundary issue of Fixed Window by tracking the exact timestamp of every request in a sorted set.
+- On each request, all timestamps older than the sliding window threshold (e.g. current time minus 1 minute) are removed.
+- If the log size remains within capacity, the new timestamp is logged and the request is allowed.
 
 <img width="1618" height="1606" alt="image" src="https://github.com/user-attachments/assets/04557dba-83f1-4904-ab71-1701b1391861" />
 
-
-#### Java Implementation
-- **Algorithm Class**: [`SlidingWindow.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindow/SlidingWindow.java)
-- **Service Handler**: [`SlidingWindowRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindow/SlidingWindowRateLimiterService.java)
+#### Core Java Implementation
+- **Files**: [`SlidingWindow.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindow/SlidingWindow.java) | [`SlidingWindowRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindow/SlidingWindowRateLimiterService.java)
 - **Mechanics**: Implemented using a Java `TreeSet` (`NavigableSet<Long>`) to keep track of sorted Unix millisecond timestamps. The `TreeSet.headSet(windowStartTimeStamp, true).clear()` method is called to efficiently discard expired timestamps.
-- **Drawback**: Significant memory usage, as every single request log is kept in memory.
+- **Drawback**: High memory usage, as every single request log is kept in memory.
+
+```java
+// Core log cleaning & consumption logic
+private synchronized void removeExpiredTimeStamps() {
+    long now = System.currentTimeMillis();
+    long windowStartTimeStamp = now - (long) (secondsInSlidingWindow * 1000);
+    requestTimestamps.headSet(windowStartTimeStamp, true).clear();
+}
+
+public synchronized boolean tryConsume() {
+    removeExpiredTimeStamps();
+    if (requestTimestamps.size() < capacity) {
+        requestTimestamps.add(System.currentTimeMillis());
+        return true;
+    }
+    return false;
+}
+```
 
 ---
 
 ### 5. Sliding Window Counter
 
 #### How It Works
-A hybrid approach combining Fixed Window Counter efficiency with Sliding Window precision. It calculates the request rate as a weighted average between the current window's request count and the previous window's request count.
+- A hybrid approach that combines the memory efficiency of Fixed Window Counter with the accuracy of Sliding Window Log.
+- Calculates an estimated request rate as a weighted average between the current window's request count and the previous window's request count:
+$$\text{Estimated Count} = \text{Current Window Count} + \text{Previous Window Count} \times \frac{\text{Remaining Time in Current Window}}{\text{Window Size}}$$
 
 <img width="1618" height="1482" alt="image" src="https://github.com/user-attachments/assets/1f8e26d3-b4bf-4228-bb75-5a612cabbbde" />
 
-Mathematical formulation:
-$$\text{Estimated Count} = \text{Current Window Count} + \text{Previous Window Count} \times \frac{\text{Remaining Time in Current Window}}{\text{Window Size}}$$
+#### Core Java Implementation
+- **Files**: [`SlidingWindowCounter.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindowcounter/SlidingWindowCounter.java) | [`SlidingWindowCounterRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindowcounter/SlidingWindowCounterRateLimiterService.java)
+- **Mechanics**: Implemented using a mapping of window index to integer counts (`Map<Long, Integer>`). It calculates the elapsed percentage of the current window to scale the weight of the previous window. Highly memory-efficient as it only requires counters instead of full timestamp logs.
 
+```java
+// Core weighted-counter calculation & consumption logic
+private double estimatedCount(long currentWindow, long previousWindow) {
+    int currentCount = getCount(currentWindow);
+    int previousCount = getCount(previousWindow);
+    double previousWindowWeight = getPreviousWindowWeight();
+    return currentCount + previousCount * previousWindowWeight;
+}
 
-#### Java Implementation
-- **Algorithm Class**: [`SlidingWindowCounter.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindowcounter/SlidingWindowCounter.java)
-- **Service Handler**: [`SlidingWindowCounterRateLimiterService.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindowcounter/SlidingWindowCounterRateLimiterService.java)
-- **Mechanics**: Implemented using a mapping of window index to integer counts (`Map<Long, Integer>`). It calculates the elapsed percentage of the current window to scale the weight of the previous window. This is highly memory-efficient, requiring only counters instead of full logs of timestamps.
+public synchronized boolean tryConsume() {
+    long currentWindow = currentWindow();
+    long previousWindow = currentWindow - 1;
+    removeOldWindows(previousWindow);
+
+    double estimatedCount = estimatedCount(currentWindow, previousWindow);
+    if (estimatedCount >= capacity) {
+        return false;
+    }
+    increment(currentWindow);
+    return true;
+}
+```
 
 ---
 
