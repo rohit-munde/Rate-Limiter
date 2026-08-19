@@ -104,7 +104,14 @@ Requests enter a FIFO queue (the bucket) of a fixed capacity. If the queue is fu
 #### How It Works
 The timeline is divided into fixed-size windows (e.g., 1 minute). Each window maintains an independent counter. When a request arrives, the current window is determined, and its counter is incremented. If the counter exceeds the window capacity, the request is rejected.
 
-![Fixed Window Counter Diagram](docs/images/fixed-window.png)
+<img width="1618" height="402" alt="image" src="https://github.com/user-attachments/assets/4685918d-7859-46ed-b88d-3836c39074ad" />
+
+<img width="1618" height="994" alt="image" src="https://github.com/user-attachments/assets/93bc50f9-5ae8-4a97-9f42-1822eb3bf233" />
+
+### Problem with Fixed Window Counter
+
+<img width="1618" height="1170" alt="image" src="https://github.com/user-attachments/assets/be61f8aa-5326-4bcb-b6f6-ba0d6098c89e" />
+
 
 #### Java Implementation
 - **Algorithm Class**: [`FixedWindow.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/fixedwindow/FixedWindow.java)
