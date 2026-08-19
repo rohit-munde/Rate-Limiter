@@ -60,7 +60,8 @@ The project acts as an intermediate **API Gateway** positioned between clients a
 #### How It Works
 A bucket is initialized with a maximum capacity of tokens. Tokens are added to the bucket at a constant refill rate (e.g., $r$ tokens/sec). Each request consumes exactly 1 token. If the bucket has no tokens left, requests are blocked.
 
-<img width="1288" height="920" alt="image" src="https://github.com/user-attachments/assets/cf1a3c13-6c93-43a0-a6bc-482462b12573" />
+<img width="1554" height="1100" alt="image" src="https://github.com/user-attachments/assets/439e633a-9053-483c-8f7a-c466fe74f4c8" />
+
 
 #### Java Implementation
 - **Algorithm Class**: [`TokenBucket.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/tokenbucket/TokenBucket.java)
@@ -85,7 +86,8 @@ public synchronized boolean tryConsume() {
 #### How It Works
 Requests enter a FIFO queue (the bucket) of a fixed capacity. If the queue is full, incoming requests are dropped. Requests leak out of the bucket at a constant, stable rate. It acts as a traffic shaper, turning bursty traffic into a smooth, steady stream.
 
-![Leaking Bucket Diagram](docs/images/leaking-bucket.png)
+<img width="1618" height="918" alt="image" src="https://github.com/user-attachments/assets/a5d6d08a-8478-45a0-8e01-70e5b3cebf7f" />
+
 
 #### Java Implementation
 - **Algorithm Class**: [`LeakingBucket.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/leakingbucket/LeakingBucket.java)
