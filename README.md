@@ -24,31 +24,8 @@ This repository is optimized for learning and experimentation, allowing develope
 
 The project acts as an intermediate **API Gateway** positioned between clients and downstream services. It handles request authentication, header normalization, and intercepts traffic to apply rate limits.
 
-```
-       +--------------+
-       |  Web Client  |
-       +------+-------+
-              | (HTTP Requests)
-              v
-  ================================== API Gateway (Spring Boot) ==================================
-  |                                                                                             |
-  |  +-------------------------+                                                                |
-  |  |   RateLimiterFilter     | <---> [ RateLimiterService ]                                   |
-  |  +------------+------------+          - TokenBucketRateLimiterService                       |
-  |               |                       - LeakingBucketRateLimiterService                     |
-  |        (If Allowed)                   - FixedWindowRateLimiterService                       |
-  |               v                       - SlidingWindowRateLimiterService                     |
-  |  +------------+------------+          - SlidingWindowCounterRateLimiterService              |
-  |  | GatewayProxyController  |                                                                |
-  |  +------------+------------+                                                                |
-  |               |                                                                             |
-  ================|==============================================================================
-                  | (Proxied HTTP Request with X-Forwarded-* headers)
-                  v
-       +----------+-----------+
-       |  Downstream Service  |
-       +----------------------+
-```
+<img width="1000" height="1000" alt="image" src="https://github.com/user-attachments/assets/c2f36ccf-4169-4184-aace-def17adf0d54" />
+
 
 ### Request Flow
 1. **Interception**: Every incoming HTTP request (except `/gateway/health`) is intercepted by [`RateLimiterFilter.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/filter/RateLimiterFilter.java).
