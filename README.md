@@ -125,7 +125,8 @@ The timeline is divided into fixed-size windows (e.g., 1 minute). Each window ma
 #### How It Works
 To solve the boundary issue of the Fixed Window, the Sliding Window Log records the exact timestamp of every request. When a request arrives, it removes all timestamps older than the sliding window threshold (e.g., current time minus 1 minute). The remaining timestamps represent the current request count. If this count is within capacity, the new timestamp is logged and the request is allowed.
 
-![Sliding Window Log Diagram](docs/images/sliding-window-log.png)
+<img width="1618" height="1606" alt="image" src="https://github.com/user-attachments/assets/04557dba-83f1-4904-ab71-1701b1391861" />
+
 
 #### Java Implementation
 - **Algorithm Class**: [`SlidingWindow.java`](file:///Users/rohitmunde/Documents/2. Coding/Java Learning/Rate-limiter/backend/src/main/java/com/example/backend/service/algorithm/slidingwindow/SlidingWindow.java)
